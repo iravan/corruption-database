@@ -70,13 +70,100 @@ export function intersects(area: string, bounds: Bounds): boolean {
   return latHit && lngHit;
 }
 
+export function formatDegrees(latitude: number, longitude: number): string {
+  const ns = latitude >= 0 ? "N" : "S";
+  const ew = longitude >= 0 ? "E" : "W";
+  return `${Math.abs(latitude).toFixed(3)}°${ns}  ${Math.abs(longitude).toFixed(3)}°${ew}`;
+}
+
 /** Southwest corner, which is the stable name of a block. */
 export function formatBlock(area: string): string {
   const point = corner(area);
-  if (!point) return area;
-  const ns = point.latitude >= 0 ? "N" : "S";
-  const ew = point.longitude >= 0 ? "E" : "W";
-  return `${Math.abs(point.latitude).toFixed(3)}°${ns}  ${Math.abs(point.longitude).toFixed(3)}°${ew}`;
+  return point ? formatDegrees(point.latitude, point.longitude) : area;
+}
+
+export type CountCell = {
+  area: string;
+  count: number;
+};
+
+export type CountMark = {
+  id: string;
+  count: number;
+  areas: string[];
+  south: number;
+  west: number;
+  latSpan: number;
+  lngSpan: number;
+};
+
+/** Power-of-two cell group so a count stays about a finger wide as the map zooms out. */
+export function binSize(zoom: number): number {
+  const pixelsPerCell = (STEP * 512 * 2 ** zoom) / 360;
+  let bin = 1;
+  while (pixelsPerCell * bin < 56 && bin < 8192) bin *= 2;
+  return bin;
+}
+
+export function clusterCounts(cells: CountCell[], zoom: number): CountMark[] {
+  const bin = binSize(zoom);
+  const groups = new Map<string, CountMark>();
+  for (const cell of cells) {
+    const parsed = parseArea(cell.area);
+    if (!parsed || cell.count < 1) continue;
+    const lat = Math.floor(parsed.latCell / bin) * bin;
+    const lng = Math.floor(parsed.lngCell / bin) * bin;
+    const id = bin === 1 ? cell.area : `${lat}:${lng}@${bin}`;
+    const existing = groups.get(id);
+    if (existing) {
+      existing.count += cell.count;
+      existing.areas.push(cell.area);
+      continue;
+    }
+    groups.set(id, {
+      id,
+      count: cell.count,
+      areas: [cell.area],
+      south: lat * STEP,
+      west: lng * STEP,
+      latSpan: bin * STEP,
+      lngSpan: bin * STEP,
+    });
+  }
+  return [...groups.values()];
+}
+
+export function boxCollection(
+  boxes: { south: number; west: number; latSpan: number; lngSpan: number }[],
+): GeoJSON.FeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: boxes.map((box) => ({
+      type: "Feature",
+      properties: {},
+      geometry: {
+        type: "Polygon",
+        coordinates: [
+          [
+            [box.west, box.south],
+            [box.west + box.lngSpan, box.south],
+            [box.west + box.lngSpan, box.south + box.latSpan],
+            [box.west, box.south + box.latSpan],
+            [box.west, box.south],
+          ],
+        ],
+      },
+    })),
+  };
+}
+
+export function markContains(mark: CountMark, latitude: number, longitude: number): boolean {
+  return (
+    latitude >= mark.south &&
+    latitude < mark.south + mark.latSpan &&
+    longitude >= mark.west &&
+    longitude < mark.west + mark.lngSpan
+  );
 }
 
 function ring(cell: Cell): GeoJSON.Position[] {

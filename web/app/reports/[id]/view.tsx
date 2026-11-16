@@ -30,53 +30,57 @@ export function ReportView({ id }: { id: string }) {
       </p>
       {error ? <p className="error">{error}</p> : null}
       {!report && !error ? <p className="muted">Loading the report.</p> : null}
-      {report ? (
-        <>
-          <h1>{report.title}</h1>
-          <dl>
-            {report.category ? (
-              <div>
-                <dt>Category</dt>
-                <dd>{report.category}</dd>
-              </div>
-            ) : null}
-            {report.agency ? (
-              <div>
-                <dt>Agency</dt>
-                <dd>{report.agency}</dd>
-              </div>
-            ) : null}
-            {report.area ? (
-              <div>
-                <dt>Block</dt>
-                <dd>{formatBlock(report.area)}</dd>
-              </div>
-            ) : null}
-            {report.place ? (
-              <div>
-                <dt>Place</dt>
-                <dd>{report.place}</dd>
-              </div>
-            ) : null}
-            {report.occurred_on ? (
-              <div>
-                <dt>Date</dt>
-                <dd>{report.occurred_on}</dd>
-              </div>
-            ) : null}
-            <div>
-              <dt>Report</dt>
-              <dd>{report.body}</dd>
-            </div>
-            {report.source_links ? (
-              <div>
-                <dt>Source links</dt>
-                <dd>{report.source_links}</dd>
-              </div>
-            ) : null}
-          </dl>
-        </>
-      ) : null}
+      {report ? <ReportBody report={report} /> : null}
     </Shell>
+  );
+}
+
+export function ReportBody({ report }: { report: Report }) {
+  return (
+    <>
+      <h1>{report.title}</h1>
+      <dl>
+        {report.category ? (
+          <div>
+            <dt>Category</dt>
+            <dd>{report.category}</dd>
+          </div>
+        ) : null}
+        {report.agency ? (
+          <div>
+            <dt>Agency</dt>
+            <dd>{report.agency}</dd>
+          </div>
+        ) : null}
+        {report.area ? (
+          <div>
+            <dt>Block</dt>
+            <dd>{formatBlock(report.area)}</dd>
+          </div>
+        ) : null}
+        {report.place ? (
+          <div>
+            <dt>Place</dt>
+            <dd>{report.place}</dd>
+          </div>
+        ) : null}
+        {report.occurred_on ? (
+          <div>
+            <dt>Date</dt>
+            <dd>{report.occurred_on}</dd>
+          </div>
+        ) : null}
+        <div>
+          <dt>Report</dt>
+          <dd>{report.body}</dd>
+        </div>
+        {report.source_links ? (
+          <div>
+            <dt>Source links</dt>
+            <dd>{report.source_links}</dd>
+          </div>
+        ) : null}
+      </dl>
+    </>
   );
 }

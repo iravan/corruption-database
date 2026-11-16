@@ -9,28 +9,26 @@ import {
   setWorkerUrl,
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { areaId, gridCollection, labelPoint, polygonCollection, type Bounds } from "@/lib/area";
+import { boxCollection, gridCollection, type Bounds, type CountMark } from "@/lib/area";
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 setWorkerUrl(`${basePath}/maplibre-gl-worker.mjs`);
 
-type Cell = {
-  area: string;
-  count: number;
-};
-
 type Label = {
-  area: string;
+  id: string;
   count: number;
   x: number;
   y: number;
 };
 
 type MapStageProps = {
-  busy: Cell[];
-  selectedArea: string | null;
+  marks: CountMark[];
+  selected: CountMark | null;
   center: [number, number];
-  onSelect: (area: string) => void;
+  focus: { longitude: number; latitude: number; zoom: number } | null;
+  onPick: (latitude: number, longitude: number) => void;
+  onCount: (id: string) => void;
+  onZoom: (zoom: number) => void;
   onSettle: (bounds: Bounds) => void;
   onGrid: (visible: boolean) => void;
 };
@@ -41,10 +39,13 @@ const EMPTY: GeoJSON.FeatureCollection = {
 };
 
 export default function MapStage({
-  busy,
-  selectedArea,
+  marks,
+  selected,
   center,
-  onSelect,
+  focus,
+  onPick,
+  onCount,
+  onZoom,
   onSettle,
   onGrid,
 }: MapStageProps) {
@@ -53,17 +54,19 @@ export default function MapStage({
   const centerRef = useRef(center);
   const [mapReady, setMapReady] = useState<Map | null>(null);
   const [labels, setLabels] = useState<Label[]>([]);
-  const busyRef = useRef(busy);
-  const onSelectRef = useRef(onSelect);
+  const marksRef = useRef(marks);
+  const onPickRef = useRef(onPick);
   const onSettleRef = useRef(onSettle);
+  const onZoomRef = useRef(onZoom);
   const onGridRef = useRef(onGrid);
 
   useEffect(() => {
-    busyRef.current = busy;
-    onSelectRef.current = onSelect;
+    marksRef.current = marks;
+    onPickRef.current = onPick;
     onSettleRef.current = onSettle;
+    onZoomRef.current = onZoom;
     onGridRef.current = onGrid;
-  }, [busy, onSelect, onSettle, onGrid]);
+  }, [marks, onPick, onSettle, onZoom, onGrid]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -130,7 +133,7 @@ export default function MapStage({
     });
 
     map.on("click", (event) => {
-      onSelectRef.current(areaId(event.lngLat.lat, event.lngLat.lng));
+      onPickRef.current(event.lngLat.lat, event.lngLat.lng);
     });
 
     mapRef.current = map;
@@ -157,10 +160,11 @@ export default function MapStage({
       const grid = gridCollection(box);
       geojsonSource(map, "grid").setData(grid);
       onGridRef.current(grid.features.length > 0);
+      onZoomRef.current(map.getZoom());
       if (settle) onSettleRef.current(box);
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
-        setLabels(projectLabels(map, busyRef.current));
+        setLabels(projectLabels(map, marksRef.current));
       });
     };
 
@@ -179,27 +183,43 @@ export default function MapStage({
   useEffect(() => {
     const map = mapReady;
     if (!map) return;
-    geojsonSource(map, "busy").setData(polygonCollection(busy.map((cell) => cell.area)));
+    geojsonSource(map, "busy").setData(boxCollection(marks));
     const frame = requestAnimationFrame(() => {
-      setLabels(projectLabels(map, busy));
+      setLabels(projectLabels(map, marks));
     });
     return () => cancelAnimationFrame(frame);
-  }, [mapReady, busy]);
+  }, [mapReady, marks]);
 
   useEffect(() => {
     const map = mapReady;
     if (!map) return;
-    geojsonSource(map, "selected").setData(polygonCollection(selectedArea ? [selectedArea] : []));
-  }, [mapReady, selectedArea]);
+    geojsonSource(map, "selected").setData(boxCollection(selected ? [selected] : []));
+  }, [mapReady, selected]);
+
+  useEffect(() => {
+    const map = mapReady;
+    if (!map || !focus) return;
+    map.flyTo({ center: [focus.longitude, focus.latitude], zoom: focus.zoom });
+  }, [mapReady, focus]);
 
   return (
     <div className="map-stage">
       <div ref={containerRef} className="map-canvas" />
-      <div className="count-layer" aria-hidden>
+      <div className="count-layer">
         {labels.map((label) => (
-          <span key={label.area} className="count-label" style={{ left: label.x, top: label.y }}>
+          <button
+            key={label.id}
+            type="button"
+            className="count-label"
+            style={{ left: label.x, top: label.y }}
+            aria-label={`${label.count} published`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onCount(label.id);
+            }}
+          >
             {label.count}
-          </span>
+          </button>
         ))}
       </div>
     </div>
@@ -214,18 +234,12 @@ function geojsonSource(map: Map, id: string): GeoJSONSource {
   return source as GeoJSONSource;
 }
 
-function projectLabels(map: Map, busy: Cell[]): Label[] {
-  const labels: Label[] = [];
-  for (const cell of busy) {
-    const point = labelPoint(cell.area);
-    if (!point) continue;
-    const projected = map.project([point.longitude, point.latitude]);
-    labels.push({
-      area: cell.area,
-      count: cell.count,
-      x: projected.x,
-      y: projected.y,
-    });
-  }
-  return labels;
+function projectLabels(map: Map, marks: CountMark[]): Label[] {
+  return marks.map((mark) => {
+    const projected = map.project([
+      mark.west + mark.lngSpan / 2,
+      mark.south + mark.latSpan / 2,
+    ]);
+    return { id: mark.id, count: mark.count, x: projected.x, y: projected.y };
+  });
 }
