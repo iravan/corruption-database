@@ -1,3 +1,4 @@
+import { corner, intersects, type Bounds } from "@/lib/area";
 import type { AdminAction, AdminReport, Report } from "@/lib/types";
 
 export const DEMO_PASSWORD = "demo";
@@ -15,6 +16,7 @@ const SAMPLE: DemoRecord[] = [
     category: "procurement",
     agency: "Education bureau",
     place: "North district",
+    area: "22320:114169",
     occurred_on: "2025-06-12",
     source_links: "https://example.com/tenders/school-roof",
     actions: [],
@@ -29,6 +31,7 @@ const SAMPLE: DemoRecord[] = [
     category: "embezzlement",
     agency: "Health department",
     place: "Central clinic",
+    area: "22319:114170",
     occurred_on: "2024-03-02",
     source_links: "",
     actions: [],
@@ -43,6 +46,7 @@ const SAMPLE: DemoRecord[] = [
     category: "procurement",
     agency: "Works department",
     place: "Harbour",
+    area: "22319:114169",
     occurred_on: "2019-01-15",
     source_links: "https://example.com/tenders/harbour",
     actions: [
@@ -64,6 +68,7 @@ const SAMPLE: DemoRecord[] = [
     category: "embezzlement",
     agency: "Transport department",
     place: "Main depot",
+    area: "22318:114169",
     occurred_on: "2023-11-03",
     source_links: "",
     actions: [
@@ -85,6 +90,7 @@ const SAMPLE: DemoRecord[] = [
     category: "abuse of office",
     agency: "Leisure department",
     place: "Riverside park",
+    area: "22319:114168",
     occurred_on: "2022-07-01",
     source_links: "",
     actions: [
@@ -98,7 +104,7 @@ const SAMPLE: DemoRecord[] = [
   },
 ];
 
-const KEY = "demo-reports";
+const KEY = "demo-reports-v2";
 
 export function isDemo(): boolean {
   return process.env.NEXT_PUBLIC_DEMO === "1";
@@ -156,6 +162,19 @@ export function demoRequest<T>(path: string, init: RequestInit = {}, token = "")
     return { id: "queued", status: "pending" } as T;
   }
 
+  if (method === "GET" && pathname === "/areas") {
+    return { areas: demoAreas(new URLSearchParams(query)) } as T;
+  }
+
+  const areaReports = pathname.match(/^\/areas\/([^/]+)\/reports$/);
+  if (method === "GET" && areaReports) {
+    const area = decodeURIComponent(areaReports[1]);
+    const reports = read()
+      .filter((report) => report.status === "published" && report.area === area)
+      .map(publicReport);
+    return { reports } as T;
+  }
+
   if (method === "POST" && pathname === "/admin/session") {
     const body = JSON.parse(String(init.body ?? "{}")) as { password?: string };
     if (body.password !== DEMO_PASSWORD) {
@@ -188,6 +207,29 @@ export function demoRequest<T>(path: string, init: RequestInit = {}, token = "")
   }
 
   throw new Error("The request failed.");
+}
+
+function demoAreas(params: URLSearchParams) {
+  const bounds: Bounds = {
+    south: Number(params.get("south")),
+    west: Number(params.get("west")),
+    north: Number(params.get("north")),
+    east: Number(params.get("east")),
+  };
+  const counts = new Map<string, number>();
+  for (const report of read()) {
+    if (report.status !== "published" || !intersects(report.area, bounds)) continue;
+    counts.set(report.area, (counts.get(report.area) ?? 0) + 1);
+  }
+  return [...counts.entries()].map(([area, count]) => {
+    const point = corner(area);
+    return {
+      area,
+      count,
+      south: point?.latitude ?? 0,
+      west: point?.longitude ?? 0,
+    };
+  });
 }
 
 function requireDemoAdmin(token: string) {

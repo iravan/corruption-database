@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Shell } from "@/components/shell";
 import { ApiError, api } from "@/lib/api";
 import { demoPublic, isDemo } from "@/lib/demo";
+import { formatBlock } from "@/lib/area";
 import type { Report } from "@/lib/types";
 
 export function ReportView({ id }: { id: string }) {
@@ -43,6 +44,12 @@ export function ReportView({ id }: { id: string }) {
               <div>
                 <dt>Agency</dt>
                 <dd>{report.agency}</dd>
+              </div>
+            ) : null}
+            {report.area ? (
+              <div>
+                <dt>Block</dt>
+                <dd>{formatBlock(report.area)}</dd>
               </div>
             ) : null}
             {report.place ? (

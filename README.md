@@ -2,7 +2,7 @@
 
 A self-hosted database of corruption reports. Anyone can submit a report. An admin reviews it before it is public. A published report is an allegation, not a finding.
 
-This app was started from [dao-ci-yi-you](https://github.com/iravan/dao-ci-yi-you), which is a 24-hour location chat. The chat, the map, the token draw, and Redis are gone. The record is a SQLite file. The build checklist is [CHECKLIST.md](CHECKLIST.md).
+This app was started from [dao-ci-yi-you](https://github.com/iravan/dao-ci-yi-you), which is a 24-hour location chat. The chat, the token draw, and Redis are gone. The area grid stays: every report names the block where it happened. The record is a SQLite file. The build checklist is [CHECKLIST.md](CHECKLIST.md).
 
 ## Run
 
@@ -17,7 +17,7 @@ cp web/.env.example web/.env.local
 cd web && bun install && bun run dev
 ```
 
-The API listens on `127.0.0.1:8787`. Open the page at `http://127.0.0.1:3000`. Put TLS and the public hostname on a reverse proxy in front of both processes. Back up `data/reports.sqlite`. A report is anonymous: the file has no contact and no IP address. The server does not print report text.
+The API listens on `127.0.0.1:8787`. Open the page at `http://127.0.0.1:3000`. The home page is a map. Choose a block, then submit the report for that block. Put TLS and the public hostname on a reverse proxy in front of both processes. Back up `data/reports.sqlite`. A report is anonymous: the file has no contact and no IP address. The server does not print report text. The location stored is the area id, not a GPS track.
 
 ## Demo
 

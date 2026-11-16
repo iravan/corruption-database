@@ -9,13 +9,13 @@ Treat every submission as an unpublished allegation until an admin publishes it.
 ## 1. Fork and rename
 
 - [x] New git repo. Do not keep pushing to dao-ci-yi-you.
-- [x] New name, README, and page title. Remove 到此一遊, the map, and the token copy.
+- [x] New name, README, and page title. Remove 到此一遊 and the token copy. The area grid stays as the location of a report.
 - [x] New env files from `server/.env.example` and `web/.env.example` in the source repo. Do not copy secrets.
 - [x] The source repo has no `LICENSE` file. Add one here before anyone else contributes.
 
 ## 2. Lock the product rules
 
-- [x] Anyone can submit. No account, no GPS, no token.
+- [x] Anyone can submit. No account and no token. The location is the map block where the incident happened, chosen on the map. The reporter's GPS is not required and is not stored.
 - [x] A new report is `pending`. It is invisible on the public site.
 - [x] An admin can redact, reject, publish, and unpublish.
 - [x] The public page shows status `published` only.
@@ -29,7 +29,7 @@ Treat every submission as an unpublished allegation until an admin publishes it.
 Keep Axum. Replace Redis as the record store. Comments in the source live in keys with a 24-hour TTL (`comment:{id}`, `EX 86400` in `server/src/store.rs`). That cannot be the database.
 
 - [x] One SQLite file on the server. Use Postgres only if more than one API process will run.
-- [x] Table `reports`: `id`, `created_at`, `updated_at`, `status` (`pending`, `published`, `rejected`), `title`, `body`, `category`, `agency`, `place`, `occurred_on`, `source_links`.
+- [x] Table `reports`: `id`, `created_at`, `updated_at`, `status` (`pending`, `published`, `rejected`), `title`, `body`, `category`, `agency`, `place`, `occurred_on`, `source_links`, `area`. The server snaps latitude and longitude to `floor(lat/0.001):floor(lng/0.001)`. The client area string is not trusted.
 - [x] No `report_private` table. An existing file drops that table on startup.
 - [x] Table `admin_actions`: `report_id`, `admin_id`, `action`, `note`, `at`.
 - [x] Status changes are the only way a report becomes public. No TTL, no sweep that deletes reports.
@@ -38,10 +38,10 @@ Keep Axum. Replace Redis as the record store. Comments in the source live in key
 
 Delete these from the new app. They are the whole current product and do not map onto reports.
 
-- [x] Server: area snap (`server/src/area.rs`), presence, token draw, comment sweep, and the 60-second clock in `server/src/lib.rs`.
+- [x] Server: presence, token draw, comment sweep, and the 60-second clock. Keep `server/src/area.rs` for the report block.
 - [x] Server: WebSocket hub (`server/src/hub.rs`) and the socket route in `server/src/routes.rs`.
 - [x] Server: Supabase JWKS login for the public (`server/src/auth.rs`). Public `POST` does not use it.
-- [x] Web: MapLibre, grid, GPS, comment sheet, token notice, demo mode (`web/components/map-stage.tsx`, `comment-sheet.tsx`, `token-notice.tsx`, `web/lib/area.ts`, `web/app/demo/page.tsx`).
+- [x] Web: GPS gate, comment sheet, token notice, and the chat demo page. Keep MapLibre and the area grid (`web/components/map-stage.tsx`, `web/lib/area.ts`). The Pages demo is example reports on that map.
 - [x] Web: `@supabase/supabase-js` unless Supabase is kept for the admin login only.
 - [x] GitHub Pages serves a static demo of the public pages and the admin panel. The database still needs the Rust process on your own machine.
 
@@ -49,9 +49,9 @@ Delete these from the new app. They are the whole current product and do not map
 
 One Next.js app, two public routes plus the form.
 
-- [x] `/` lists published reports: title, category, agency, place, date. Newest first.
+- [x] `/` is the map. A published report fills its block. Tap a block to read the allegations there.
 - [x] `/reports/[id]` shows one published report, with the allegation label.
-- [x] `/report` is the form: title, body, category, agency, place, date, source links. No contact field.
+- [x] `/report?area=` is the form for that block: title, body, category, agency, place, date, source links. No contact field. The form sends the southwest corner; the server snaps it back to the same cell.
 - [x] Submit calls `POST /reports` with no auth header.
 - [x] Success copy says the report is queued and is not public yet. Do not show the private id in a guessable public URL until it is published.
 - [x] Empty title or body is rejected in the form and again in Rust. Cap body length (for example 4,000 characters).
@@ -70,11 +70,13 @@ New routes, not a mode of the map.
 
 ## 7. API
 
-Replace the area routes in `server/src/routes.rs`.
+Keep the area routes. They list published reports, not chat comments.
 
+- [x] `GET /areas?south&west&north&east` returns published blocks in view, with a count.
+- [x] `GET /areas/{area}/reports` returns the published reports in that block.
 - [x] `GET /reports` returns published reports only. No contact, no IP hash, no admin notes.
 - [x] `GET /reports/{id}` returns the same shape, or 404 when the report is not published.
-- [x] `POST /reports` accepts the public fields only. A `contact` field in the body is ignored. Writes `pending`. Returns `{ "id", "status": "pending" }`.
+- [x] `POST /reports` accepts the public fields plus `latitude` and `longitude`. A `contact` field in the body is ignored. A missing location is rejected. Writes `pending` and the snapped `area`. Returns `{ "id", "status": "pending" }`.
 - [x] `GET /admin/reports?status=` returns the queue, including private fields.
 - [x] `PATCH /admin/reports/{id}` updates text and status. Require the admin session.
 - [x] CORS stays as it is now: `CORS_ORIGINS` lists the Next.js origin only.

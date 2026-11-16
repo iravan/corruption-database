@@ -65,7 +65,9 @@ fn report(title: &str) -> Value {
         "place": "Harbour",
         "occurred_on": "2019-01-01",
         "source_links": "",
-        "contact": "letterbox@example.com"
+        "contact": "letterbox@example.com",
+        "latitude": 22.3194,
+        "longitude": 114.1698
     })
 }
 
@@ -80,6 +82,9 @@ async fn a_submission_stays_hidden_until_an_admin_publishes_it() {
     let (status, list) = call(&app, Request::builder().uri("/reports").body(Body::empty()).unwrap()).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(list["reports"].as_array().unwrap().len(), 0);
+    let (status, areas) = call(&app, bounds()).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(areas["areas"].as_array().unwrap().is_empty());
     let raw = list.to_string();
     assert!(!raw.contains("letterbox@example.com"));
     assert!(!raw.contains("contact"));
@@ -129,6 +134,7 @@ async fn a_submission_stays_hidden_until_an_admin_publishes_it() {
     assert_eq!(queue["reports"][0]["id"], id);
     assert!(!queue.to_string().contains("letterbox@example.com"));
     assert!(queue["reports"][0].get("contact").is_none());
+    assert_eq!(queue["reports"][0]["area"], "22319:114169");
 
     let (status, published) = call(
         &app,
@@ -163,6 +169,20 @@ async fn a_submission_stays_hidden_until_an_admin_publishes_it() {
     assert!(!raw.contains("letterbox@example.com"));
     assert!(!raw.contains("contact"));
     assert!(!raw.contains("redacted"));
+    let (status, areas) = call(&app, bounds()).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(areas["areas"][0]["area"], "22319:114169");
+    assert_eq!(areas["areas"][0]["count"], 1);
+    let (status, cell) = call(
+        &app,
+        Request::builder()
+            .uri("/areas/22319:114169/reports")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(cell["reports"][0]["title"], "Harbour tender");
 
     let (status, _) = call(
         &app,
@@ -199,7 +219,17 @@ async fn a_submission_stays_hidden_until_an_admin_publishes_it() {
     let (status, list) = call(&app, Request::builder().uri("/reports").body(Body::empty()).unwrap()).await;
     assert_eq!(status, StatusCode::OK);
     assert!(list["reports"].as_array().unwrap().is_empty());
+    let (status, areas) = call(&app, bounds()).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(areas["areas"].as_array().unwrap().is_empty());
     let _ = std::fs::remove_file(path);
+}
+
+fn bounds() -> Request<Body> {
+    Request::builder()
+        .uri("/areas?south=22.3&west=114.1&north=22.4&east=114.2")
+        .body(Body::empty())
+        .unwrap()
 }
 
 #[tokio::test]
@@ -226,6 +256,21 @@ async fn empty_text_and_private_data_are_not_stored() {
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert!(body["error"].as_str().unwrap().contains("phone numbers"));
+
+    let (status, body) = call(
+        &app,
+        post(
+            "/reports",
+            None,
+            json!({
+                "title": "A tender",
+                "body": "The winning bid was fixed before the deadline."
+            }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body["error"].as_str().unwrap().contains("location"));
 
     let (status, session) = call(
         &app,

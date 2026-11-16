@@ -1,13 +1,16 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import Link from "next/link";
+import { FormEvent, useEffect, useState } from "react";
 import { Shell } from "@/components/shell";
+import { corner, formatBlock } from "@/lib/area";
 import { ApiError, api } from "@/lib/api";
 import { CATEGORIES } from "@/lib/types";
 
 const BODY_MAX = 4000;
 
 export default function ReportPage() {
+  const [area, setArea] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [category, setCategory] = useState("");
@@ -18,10 +21,19 @@ export default function ReportPage() {
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const [queued, setQueued] = useState(false);
+  const point = area ? corner(area) : null;
+
+  useEffect(() => {
+    setArea(new URLSearchParams(window.location.search).get("area") ?? "");
+  }, []);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setError("");
+    if (!point) {
+      setError("Choose a block on the map.");
+      return;
+    }
     if (!title.trim() || !body.trim()) {
       setError("A title and a report are required.");
       return;
@@ -42,6 +54,8 @@ export default function ReportPage() {
           place,
           occurred_on: occurredOn,
           source_links: sourceLinks,
+          latitude: point.latitude,
+          longitude: point.longitude,
         }),
       });
       setQueued(true);
@@ -55,16 +69,21 @@ export default function ReportPage() {
   return (
     <Shell>
       <h1>Report corruption</h1>
-      {queued ? (
-        <p className="success">
-          Your anonymous report is queued for review. It is not public.
+      {area === null ? (
+        <p className="muted">Loading the block.</p>
+      ) : queued ? (
+        <p className="success">Your anonymous report is queued for review. It is not public.</p>
+      ) : !point ? (
+        <p>
+          Choose the block where it happened on the <Link href="/">map</Link>.
         </p>
       ) : (
         <form onSubmit={onSubmit}>
           <p className="help">
-            A report is anonymous. Do not include your name, phone number,
-            identity number, or home address.
+            A report is anonymous. Do not include your name, phone number, identity number, or home
+            address.
           </p>
+          <p className="meta">Block {formatBlock(area ?? "")}</p>
           <label>
             Title
             <input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} required />
@@ -78,7 +97,9 @@ export default function ReportPage() {
               required
             />
           </label>
-          <p className="help">{body.trim().length} / {BODY_MAX}</p>
+          <p className="help">
+            {body.trim().length} / {BODY_MAX}
+          </p>
           <label>
             Category
             <select value={category} onChange={(event) => setCategory(event.target.value)}>

@@ -1,6 +1,7 @@
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
@@ -9,7 +10,7 @@ const TITLE_MAX: usize = 200;
 const BODY_MAX: usize = 4000;
 const SHORT_MAX: usize = 200;
 const LINKS_MAX: usize = 1000;
-const COLUMNS: &str = "r.id, r.created_at, r.updated_at, r.status, r.title, r.body, r.category, r.agency, r.place, r.occurred_on, r.source_links";
+const COLUMNS: &str = "r.id, r.created_at, r.updated_at, r.status, r.title, r.body, r.category, r.agency, r.place, r.occurred_on, r.source_links, r.area";
 
 #[derive(Clone)]
 pub struct Store {
@@ -46,6 +47,15 @@ pub struct Report {
     pub place: String,
     pub occurred_on: String,
     pub source_links: String,
+    pub area: String,
+}
+
+#[derive(Serialize, Clone)]
+pub struct AreaCount {
+    pub area: String,
+    pub count: i64,
+    pub south: f64,
+    pub west: f64,
 }
 
 #[derive(Serialize, Clone)]
@@ -71,6 +81,8 @@ pub struct NewReport {
     pub place: String,
     pub occurred_on: String,
     pub source_links: String,
+    pub latitude: f64,
+    pub longitude: f64,
 }
 
 pub struct ReportPatch {
@@ -110,7 +122,8 @@ impl Store {
                 agency TEXT NOT NULL,
                 place TEXT NOT NULL,
                 occurred_on TEXT NOT NULL,
-                source_links TEXT NOT NULL
+                source_links TEXT NOT NULL,
+                area TEXT NOT NULL DEFAULT ''
             );
             DROP TABLE IF EXISTS report_private;
             CREATE TABLE IF NOT EXISTS admin_actions (
@@ -123,6 +136,7 @@ impl Store {
             );",
         )
         .map_err(failed)?;
+        ensure_area_column(&conn)?;
         Ok(Self {
             db: Arc::new(Mutex::new(conn)),
         })
@@ -136,14 +150,16 @@ impl Store {
         let place = optional(&new.place, SHORT_MAX, "The place is too long.")?;
         let occurred_on = optional(&new.occurred_on, SHORT_MAX, "The date is too long.")?;
         let source_links = optional(&new.source_links, LINKS_MAX, "The source links are too long.")?;
+        let area = crate::area::area_id(new.latitude, new.longitude)
+            .ok_or(StoreError::Invalid("A location on the map is required."))?;
         let id = Uuid::new_v4().to_string();
         let now = now();
         let mut db = self.lock();
         let tx = db.transaction().map_err(failed)?;
         tx.execute(
-            "INSERT INTO reports (id, created_at, updated_at, status, title, body, category, agency, place, occurred_on, source_links)
-             VALUES (?1, ?2, ?2, 'pending', ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-            params![id, now, title, body, category, agency, place, occurred_on, source_links],
+            "INSERT INTO reports (id, created_at, updated_at, status, title, body, category, agency, place, occurred_on, source_links, area)
+             VALUES (?1, ?2, ?2, 'pending', ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![id, now, title, body, category, agency, place, occurred_on, source_links, area],
         )
         .map_err(failed)?;
         tx.commit().map_err(failed)?;
@@ -159,6 +175,7 @@ impl Store {
             place,
             occurred_on,
             source_links,
+            area,
         })
     }
 
@@ -180,6 +197,72 @@ impl Store {
     pub fn get_public(&self, id: &str) -> Result<Option<Report>, StoreError> {
         let db = self.lock();
         Ok(load_report(&db, id)?.filter(|report| report.status == "published"))
+    }
+
+    // Full scan. An index can wait until the file is large.
+    pub fn areas_in_view(
+        &self,
+        south: f64,
+        west: f64,
+        north: f64,
+        east: f64,
+    ) -> Result<Vec<AreaCount>, StoreError> {
+        if ![south, west, north, east].iter().all(|value| value.is_finite())
+            || !(-90.0..=90.0).contains(&south)
+            || !(-90.0..=90.0).contains(&north)
+            || !(-180.0..=180.0).contains(&west)
+            || !(-180.0..=180.0).contains(&east)
+            || south >= north
+        {
+            return Err(StoreError::Invalid("The map bounds are invalid."));
+        }
+        let db = self.lock();
+        let mut stmt = db
+            .prepare("SELECT area FROM reports WHERE status = 'published' AND area != ''")
+            .map_err(failed)?;
+        let areas = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(failed)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(failed)?;
+        let mut counts: HashMap<String, i64> = HashMap::new();
+        for area in areas {
+            if crate::area::intersects(&area, south, west, north, east) {
+                *counts.entry(area).or_default() += 1;
+            }
+        }
+        let mut out: Vec<AreaCount> = counts
+            .into_iter()
+            .filter_map(|(area, count)| {
+                let (south, west) = crate::area::southwest(&area)?;
+                Some(AreaCount {
+                    area,
+                    count,
+                    south,
+                    west,
+                })
+            })
+            .collect();
+        out.sort_by(|left, right| left.area.cmp(&right.area));
+        Ok(out)
+    }
+
+    pub fn published_in_area(&self, area: &str) -> Result<Vec<Report>, StoreError> {
+        if crate::area::parse_area(area).is_none() {
+            return Err(StoreError::Invalid("The area is invalid."));
+        }
+        let db = self.lock();
+        let mut stmt = db
+            .prepare(&format!(
+                "SELECT {COLUMNS} FROM reports r WHERE r.status = 'published' AND r.area = ?1 ORDER BY r.created_at DESC"
+            ))
+            .map_err(failed)?;
+        let rows = stmt
+            .query_map(params![area], map_report)
+            .map_err(failed)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(failed)?;
+        Ok(rows)
     }
 
     pub fn list_admin(&self, status: Option<&str>) -> Result<Vec<Report>, StoreError> {
@@ -336,7 +419,26 @@ fn map_report(row: &rusqlite::Row<'_>) -> rusqlite::Result<Report> {
         place: row.get(8)?,
         occurred_on: row.get(9)?,
         source_links: row.get(10)?,
+        area: row.get(11)?,
     })
+}
+
+fn ensure_area_column(conn: &Connection) -> Result<(), StoreError> {
+    let mut stmt = conn.prepare("PRAGMA table_info(reports)").map_err(failed)?;
+    let names = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(failed)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(failed)?;
+    if names.iter().any(|name| name == "area") {
+        return Ok(());
+    }
+    conn.execute(
+        "ALTER TABLE reports ADD COLUMN area TEXT NOT NULL DEFAULT ''",
+        [],
+    )
+    .map_err(failed)?;
+    Ok(())
 }
 
 fn required(value: &str, max: usize, empty: &'static str, long: &'static str) -> Result<String, StoreError> {
@@ -558,6 +660,8 @@ mod tests {
                     place: "Harbour".into(),
                     occurred_on: "2019-01-01".into(),
                     source_links: "".into(),
+                    latitude: 22.3194,
+                    longitude: 114.1698,
                 })
                 .unwrap()
                 .id

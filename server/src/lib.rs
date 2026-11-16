@@ -1,3 +1,4 @@
+pub mod area;
 pub mod routes;
 pub mod store;
 

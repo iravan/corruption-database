@@ -52,6 +52,8 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/reports", get(list_reports).post(create_report))
         .route("/reports/{id}", get(get_report))
+        .route("/areas", get(list_areas))
+        .route("/areas/{area}/reports", get(list_area_reports))
         .route("/admin/session", post(login).delete(logout))
         .route("/admin/reports", get(admin_list))
         .route("/admin/reports/{id}", get(admin_get).patch(admin_patch))
@@ -90,6 +92,18 @@ struct CreateBody {
     occurred_on: String,
     #[serde(default)]
     source_links: String,
+    #[serde(default)]
+    latitude: Option<f64>,
+    #[serde(default)]
+    longitude: Option<f64>,
+}
+
+#[derive(Deserialize)]
+struct BoundsQuery {
+    south: f64,
+    west: f64,
+    north: f64,
+    east: f64,
 }
 
 #[derive(Deserialize)]
@@ -131,6 +145,23 @@ async fn get_report(State(state): State<AppState>, Path(id): Path<String>) -> Re
     }
 }
 
+async fn list_areas(State(state): State<AppState>, Query(bounds): Query<BoundsQuery>) -> Response {
+    match state
+        .store
+        .areas_in_view(bounds.south, bounds.west, bounds.north, bounds.east)
+    {
+        Ok(areas) => Json(json!({ "areas": areas })).into_response(),
+        Err(err) => store_error(err),
+    }
+}
+
+async fn list_area_reports(State(state): State<AppState>, Path(area): Path<String>) -> Response {
+    match state.store.published_in_area(&area) {
+        Ok(reports) => Json(json!({ "reports": reports })).into_response(),
+        Err(err) => store_error(err),
+    }
+}
+
 async fn create_report(
     State(state): State<AppState>,
     client: ClientIp,
@@ -150,6 +181,8 @@ async fn create_report(
         place: body.place,
         occurred_on: body.occurred_on,
         source_links: body.source_links,
+        latitude: body.latitude.unwrap_or(f64::NAN),
+        longitude: body.longitude.unwrap_or(f64::NAN),
     });
     match created {
         Ok(report) => (

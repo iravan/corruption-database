@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Shell } from "@/components/shell";
 import { ApiError, adminToken, api, clearAdminToken } from "@/lib/api";
 import { demoAdmin, isDemo } from "@/lib/demo";
+import { formatBlock } from "@/lib/area";
 import { CATEGORIES, type AdminReport, type Report } from "@/lib/types";
 
 export function AdminReportView({ id }: { id: string }) {
@@ -129,6 +130,7 @@ export function AdminReportView({ id }: { id: string }) {
       {report ? (
         <div className="stack">
           <p className="meta">Status: {report.status}</p>
+          {report.area ? <p className="meta">Block {formatBlock(report.area)}</p> : null}
           <label>
             Title
             <input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} />

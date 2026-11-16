@@ -10,6 +10,7 @@ export type Report = {
   place: string;
   occurred_on: string;
   source_links: string;
+  area: string;
 };
 
 export type AdminAction = {
