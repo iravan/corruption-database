@@ -1,0 +1,221 @@
+@import "tailwindcss";
+
+:root {
+  --ink: #241f1a;
+  --paper: #f4efe6;
+  --seal: #8f2d22;
+  --mute: #6f675e;
+  --line: rgba(36, 31, 26, 0.16);
+  --serif: "Iowan Old Style", Palatino, "Palatino Linotype", "Songti TC",
+    "PMingLiU", serif;
+  --sans: "Avenir Next", "PingFang TC", "Hiragino Sans CNS", "Noto Sans TC",
+    sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  line-height: 1.5;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--seal);
+  outline-offset: 2px;
+}
+
+.shell {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 4rem;
+}
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: baseline;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.brand {
+  font-family: var(--serif);
+  font-size: 1.35rem;
+  text-decoration: none;
+}
+
+.nav {
+  display: flex;
+  gap: 1rem;
+}
+
+.nav a {
+  text-decoration: none;
+}
+
+h1,
+h2 {
+  font-family: var(--serif);
+  font-weight: 500;
+}
+
+h1 {
+  font-size: 1.8rem;
+  margin: 0 0 0.75rem;
+}
+
+h2 {
+  font-size: 1.15rem;
+  margin: 0 0 0.25rem;
+}
+
+.muted {
+  color: var(--mute);
+}
+
+.allegation {
+  border-left: 3px solid var(--seal);
+  background: #f7e7e2;
+  padding: 0.7rem 0.85rem;
+  margin: 0 0 1.25rem;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.card {
+  display: block;
+  text-decoration: none;
+  border: 1px solid var(--line);
+  background: white;
+  padding: 0.9rem 1rem;
+}
+
+.meta,
+.help {
+  color: var(--mute);
+  font-size: 0.92rem;
+}
+
+form,
+.stack {
+  display: grid;
+  gap: 0.9rem;
+}
+
+label {
+  display: grid;
+  gap: 0.3rem;
+}
+
+input,
+textarea,
+select {
+  background: white;
+  border: 1px solid var(--line);
+  padding: 0.55rem 0.65rem;
+}
+
+textarea {
+  min-height: 11rem;
+  resize: vertical;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+button {
+  background: var(--ink);
+  color: var(--paper);
+  border: 0;
+  padding: 0.55rem 0.85rem;
+}
+
+button.secondary {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.error {
+  color: var(--seal);
+  margin: 0;
+}
+
+.success {
+  background: #e5efe4;
+  padding: 0.85rem 1rem;
+}
+
+dl {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0 0 1.25rem;
+}
+
+dl div {
+  display: grid;
+  gap: 0.1rem;
+}
+
+dt {
+  color: var(--mute);
+  font-size: 0.82rem;
+}
+
+dd {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.history {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+}
+
+.history li {
+  padding: 0.45rem 0;
+  border-top: 1px solid var(--line);
+  font-size: 0.92rem;
+}
