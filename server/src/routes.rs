@@ -90,8 +90,6 @@ struct CreateBody {
     occurred_on: String,
     #[serde(default)]
     source_links: String,
-    #[serde(default)]
-    contact: String,
 }
 
 #[derive(Deserialize)]
@@ -152,8 +150,6 @@ async fn create_report(
         place: body.place,
         occurred_on: body.occurred_on,
         source_links: body.source_links,
-        contact: body.contact,
-        ip: client.0,
     });
     match created {
         Ok(report) => (

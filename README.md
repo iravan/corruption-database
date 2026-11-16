@@ -17,4 +17,4 @@ cp web/.env.example web/.env.local
 cd web && bun install && bun run dev
 ```
 
-The API listens on `127.0.0.1:8787`. Open the page at `http://127.0.0.1:3000`. Put TLS and the public hostname on a reverse proxy in front of both processes. Back up `data/reports.sqlite`. The server does not print report text or the reporter's contact.
+The API listens on `127.0.0.1:8787`. Open the page at `http://127.0.0.1:3000`. Put TLS and the public hostname on a reverse proxy in front of both processes. Back up `data/reports.sqlite`. A report is anonymous: the file has no contact and no IP address. The server does not print report text.

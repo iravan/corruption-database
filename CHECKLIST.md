@@ -19,8 +19,7 @@ Treat every submission as an unpublished allegation until an admin publishes it.
 - [x] A new report is `pending`. It is invisible on the public site.
 - [x] An admin can redact, reject, publish, and unpublish.
 - [x] The public page shows status `published` only.
-- [x] The public record stores no reporter name, email, phone, or account id.
-- [x] Optional reporter contact is a separate private field, visible only in the admin site.
+- [x] A submission is anonymous. The database stores no reporter name, email, phone, account id, contact, or IP address.
 - [x] Refuse national ID numbers, home addresses, and private phone numbers in the public text. Admin redacts anything that slips through before publish.
 - [x] Each published page says the text is an allegation, not a finding.
 - [x] No file uploads in the first version. A report is text plus optional source links.
@@ -31,7 +30,7 @@ Keep Axum. Replace Redis as the record store. Comments in the source live in key
 
 - [x] One SQLite file on the server. Use Postgres only if more than one API process will run.
 - [x] Table `reports`: `id`, `created_at`, `updated_at`, `status` (`pending`, `published`, `rejected`), `title`, `body`, `category`, `agency`, `place`, `occurred_on`, `source_links`.
-- [x] Table `report_private`: `report_id`, `contact`, `submitter_ip_hash`. Never selected by public routes.
+- [x] No `report_private` table. An existing file drops that table on startup.
 - [x] Table `admin_actions`: `report_id`, `admin_id`, `action`, `note`, `at`.
 - [x] Status changes are the only way a report becomes public. No TTL, no sweep that deletes reports.
 
@@ -52,7 +51,7 @@ One Next.js app, two public routes plus the form.
 
 - [x] `/` lists published reports: title, category, agency, place, date. Newest first.
 - [x] `/reports/[id]` shows one published report, with the allegation label.
-- [x] `/report` is the form: title, body, category, agency, place, date, source links, optional contact.
+- [x] `/report` is the form: title, body, category, agency, place, date, source links. No contact field.
 - [x] Submit calls `POST /reports` with no auth header.
 - [x] Success copy says the report is queued and is not public yet. Do not show the private id in a guessable public URL until it is published.
 - [x] Empty title or body is rejected in the form and again in Rust. Cap body length (for example 4,000 characters).
@@ -64,7 +63,7 @@ New routes, not a mode of the map.
 
 - [x] `/admin` requires an admin session. Everyone else gets the public site only.
 - [x] One admin allowlist is enough: a password checked by Axum, or one OIDC login whose subject is in `ADMIN_SUBJECTS`. Do not offer Apple, Google, and Facebook to the public.
-- [x] Queue: `pending` reports, oldest first. Show private contact here only.
+- [x] Queue: `pending` reports, oldest first. The queue has no reporter identity.
 - [x] Detail: edit public fields, redact, then reject or publish. Both actions write `admin_actions`.
 - [x] Published list: unpublish sends the report back to `pending` and removes it from `/`.
 - [x] Rejected list stays in the admin site. It never appears on `/`.
@@ -75,7 +74,7 @@ Replace the area routes in `server/src/routes.rs`.
 
 - [x] `GET /reports` returns published reports only. No contact, no IP hash, no admin notes.
 - [x] `GET /reports/{id}` returns the same shape, or 404 when the report is not published.
-- [x] `POST /reports` accepts the public fields plus optional `contact`. Writes `pending`. Returns `{ "id", "status": "pending" }`.
+- [x] `POST /reports` accepts the public fields only. A `contact` field in the body is ignored. Writes `pending`. Returns `{ "id", "status": "pending" }`.
 - [x] `GET /admin/reports?status=` returns the queue, including private fields.
 - [x] `PATCH /admin/reports/{id}` updates text and status. Require the admin session.
 - [x] CORS stays as it is now: `CORS_ORIGINS` lists the Next.js origin only.
@@ -89,7 +88,7 @@ Replace the area routes in `server/src/routes.rs`.
 - [x] Env: `BIND`, `DATABASE_PATH`, `CORS_ORIGINS`, and `ADMIN_PASSWORD`. `REDIS_URL`, `SUPABASE_JWKS_URL`, and `JWT_HS_SECRET` are gone.
 - [x] Web env: `NEXT_PUBLIC_API_URL` points at the public API origin.
 - [ ] Back up the SQLite file on a schedule. Redis in the source repo is disposable; the new file is the record.
-- [x] Logs must not print report bodies or reporter contact.
+- [x] Logs must not print report bodies.
 
 ## 9. Done when
 

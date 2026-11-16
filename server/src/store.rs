@@ -1,7 +1,6 @@
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
@@ -58,17 +57,9 @@ pub struct AdminAction {
 }
 
 #[derive(Serialize, Clone)]
-pub struct AdminListItem {
-    #[serde(flatten)]
-    pub report: Report,
-    pub contact: String,
-}
-
-#[derive(Serialize, Clone)]
 pub struct AdminReport {
     #[serde(flatten)]
     pub report: Report,
-    pub contact: String,
     pub actions: Vec<AdminAction>,
 }
 
@@ -80,8 +71,6 @@ pub struct NewReport {
     pub place: String,
     pub occurred_on: String,
     pub source_links: String,
-    pub contact: String,
-    pub ip: String,
 }
 
 pub struct ReportPatch {
@@ -123,11 +112,7 @@ impl Store {
                 occurred_on TEXT NOT NULL,
                 source_links TEXT NOT NULL
             );
-            CREATE TABLE IF NOT EXISTS report_private (
-                report_id TEXT PRIMARY KEY REFERENCES reports(id),
-                contact TEXT NOT NULL,
-                submitter_ip_hash TEXT NOT NULL
-            );
+            DROP TABLE IF EXISTS report_private;
             CREATE TABLE IF NOT EXISTS admin_actions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 report_id TEXT NOT NULL REFERENCES reports(id),
@@ -151,10 +136,6 @@ impl Store {
         let place = optional(&new.place, SHORT_MAX, "The place is too long.")?;
         let occurred_on = optional(&new.occurred_on, SHORT_MAX, "The date is too long.")?;
         let source_links = optional(&new.source_links, LINKS_MAX, "The source links are too long.")?;
-        let contact = new.contact.trim();
-        if contact.chars().count() > SHORT_MAX {
-            return Err(StoreError::Invalid("The contact is too long."));
-        }
         let id = Uuid::new_v4().to_string();
         let now = now();
         let mut db = self.lock();
@@ -163,11 +144,6 @@ impl Store {
             "INSERT INTO reports (id, created_at, updated_at, status, title, body, category, agency, place, occurred_on, source_links)
              VALUES (?1, ?2, ?2, 'pending', ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![id, now, title, body, category, agency, place, occurred_on, source_links],
-        )
-        .map_err(failed)?;
-        tx.execute(
-            "INSERT INTO report_private (report_id, contact, submitter_ip_hash) VALUES (?1, ?2, ?3)",
-            params![id, contact, hash_ip(&new.ip)],
         )
         .map_err(failed)?;
         tx.commit().map_err(failed)?;
@@ -206,7 +182,7 @@ impl Store {
         Ok(load_report(&db, id)?.filter(|report| report.status == "published"))
     }
 
-    pub fn list_admin(&self, status: Option<&str>) -> Result<Vec<AdminListItem>, StoreError> {
+    pub fn list_admin(&self, status: Option<&str>) -> Result<Vec<Report>, StoreError> {
         if let Some(status) = status {
             if !is_status(status) {
                 return Err(StoreError::Invalid("Status is invalid."));
@@ -217,30 +193,19 @@ impl Store {
         let (sql, bind): (String, Option<&str>) = match status {
             Some(status) => (
                 format!(
-                    "SELECT {COLUMNS}, p.contact
-                     FROM reports r
-                     JOIN report_private p ON p.report_id = r.id
-                     WHERE r.status = ?1
-                     ORDER BY r.created_at {order}"
+                    "SELECT {COLUMNS} FROM reports r WHERE r.status = ?1 ORDER BY r.created_at {order}"
                 ),
                 Some(status),
             ),
             None => (
-                format!(
-                    "SELECT {COLUMNS}, p.contact
-                     FROM reports r
-                     JOIN report_private p ON p.report_id = r.id
-                     ORDER BY r.created_at {order}"
-                ),
+                format!("SELECT {COLUMNS} FROM reports r ORDER BY r.created_at {order}"),
                 None,
             ),
         };
         let mut stmt = db.prepare(&sql).map_err(failed)?;
         let rows = match bind {
-            Some(status) => stmt
-                .query_map(params![status], map_admin_item)
-                .map_err(failed)?,
-            None => stmt.query_map([], map_admin_item).map_err(failed)?,
+            Some(status) => stmt.query_map(params![status], map_report).map_err(failed)?,
+            None => stmt.query_map([], map_report).map_err(failed)?,
         };
         rows.collect::<Result<Vec<_>, _>>().map_err(failed)
     }
@@ -335,20 +300,7 @@ fn load_report(db: &Connection, id: &str) -> Result<Option<Report>, StoreError> 
 }
 
 fn load_admin(db: &Connection, id: &str) -> Result<Option<AdminReport>, StoreError> {
-    let Some(item) = db
-        .query_row(
-            &format!(
-                "SELECT {COLUMNS}, p.contact
-                 FROM reports r
-                 JOIN report_private p ON p.report_id = r.id
-                 WHERE r.id = ?1"
-            ),
-            params![id],
-            map_admin_item,
-        )
-        .optional()
-        .map_err(failed)?
-    else {
+    let Some(report) = load_report(db, id)? else {
         return Ok(None);
     };
     let mut stmt = db
@@ -368,11 +320,7 @@ fn load_admin(db: &Connection, id: &str) -> Result<Option<AdminReport>, StoreErr
         .map_err(failed)?
         .collect::<Result<Vec<_>, _>>()
         .map_err(failed)?;
-    Ok(Some(AdminReport {
-        report: item.report,
-        contact: item.contact,
-        actions,
-    }))
+    Ok(Some(AdminReport { report, actions }))
 }
 
 fn map_report(row: &rusqlite::Row<'_>) -> rusqlite::Result<Report> {
@@ -388,13 +336,6 @@ fn map_report(row: &rusqlite::Row<'_>) -> rusqlite::Result<Report> {
         place: row.get(8)?,
         occurred_on: row.get(9)?,
         source_links: row.get(10)?,
-    })
-}
-
-fn map_admin_item(row: &rusqlite::Row<'_>) -> rusqlite::Result<AdminListItem> {
-    Ok(AdminListItem {
-        report: map_report(row)?,
-        contact: row.get(11)?,
     })
 }
 
@@ -422,7 +363,7 @@ fn optional(value: &str, max: usize, long: &'static str) -> Result<String, Store
 fn screen(value: &str) -> Result<(), StoreError> {
     if rejects_private_data(value) {
         Err(StoreError::Invalid(
-            "Remove phone numbers, identity numbers, and home addresses from the public text. Put a way to reach you only in the contact field.",
+            "Remove names, phone numbers, identity numbers, and home addresses. A report is anonymous.",
         ))
     } else {
         Ok(())
@@ -435,24 +376,6 @@ fn is_status(status: &str) -> bool {
 
 fn now() -> String {
     Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
-}
-
-fn hash_ip(ip: &str) -> String {
-    // ponytail: fixed prefix, not a secret. It keeps the raw IP out of the file.
-    let mut hasher = Sha256::new();
-    hasher.update(b"corruption-database:");
-    hasher.update(ip.as_bytes());
-    hex(&hasher.finalize())
-}
-
-fn hex(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut out = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        out.push(HEX[(byte >> 4) as usize] as char);
-        out.push(HEX[(byte & 0xf) as usize] as char);
-    }
-    out
 }
 
 fn rejects_private_data(text: &str) -> bool {
@@ -635,8 +558,6 @@ mod tests {
                     place: "Harbour".into(),
                     occurred_on: "2019-01-01".into(),
                     source_links: "".into(),
-                    contact: "letterbox@example.com".into(),
-                    ip: "127.0.0.1".into(),
                 })
                 .unwrap()
                 .id
@@ -644,7 +565,16 @@ mod tests {
         let store = Store::open(&path).unwrap();
         let report = store.get_admin(&id).unwrap().unwrap();
         assert_eq!(report.report.status, "pending");
-        assert_eq!(report.contact, "letterbox@example.com");
+        let conn = Connection::open(&path).unwrap();
+        let private: Option<String> = conn
+            .query_row(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'report_private'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()
+            .unwrap();
+        assert!(private.is_none());
         assert!(store.get_public(&id).unwrap().is_none());
         assert!(store.list_public().unwrap().is_empty());
         let _ = std::fs::remove_file(&path);

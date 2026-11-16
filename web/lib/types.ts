@@ -19,11 +19,7 @@ export type AdminAction = {
   at: string;
 };
 
-export type AdminListItem = Report & {
-  contact: string;
-};
-
-export type AdminReport = AdminListItem & {
+export type AdminReport = Report & {
   actions: AdminAction[];
 };
 

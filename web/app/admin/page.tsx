@@ -4,7 +4,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { Shell } from "@/components/shell";
 import { ApiError, adminToken, api, clearAdminToken, setAdminToken } from "@/lib/api";
-import { meta, type AdminListItem } from "@/lib/types";
+import { meta, type Report } from "@/lib/types";
 
 const STATUSES = ["pending", "published", "rejected"] as const;
 
@@ -13,7 +13,7 @@ export default function AdminPage() {
   const [token, setToken] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<(typeof STATUSES)[number]>("pending");
-  const [reports, setReports] = useState<AdminListItem[] | null>(null);
+  const [reports, setReports] = useState<Report[] | null>(null);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
 
@@ -28,7 +28,7 @@ export default function AdminPage() {
     }
     setReports(null);
     setError("");
-    api<{ reports: AdminListItem[] }>(`/admin/reports?status=${status}`, {}, token)
+    api<{ reports: Report[] }>(`/admin/reports?status=${status}`, {}, token)
       .then((data) => setReports(data.reports))
       .catch((err: unknown) => {
         if (err instanceof ApiError && err.message.includes("admin session")) {
@@ -115,7 +115,6 @@ export default function AdminPage() {
                 <Link className="card" href={`/admin/${report.id}`}>
                   <h2>{report.title}</h2>
                   <p className="meta">{meta(report)}</p>
-                  <p className="meta">Contact: {report.contact || "none"}</p>
                 </Link>
               </li>
             ))}

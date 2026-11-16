@@ -116,7 +116,6 @@ export default function AdminReportPage() {
       {report ? (
         <div className="stack">
           <p className="meta">Status: {report.status}</p>
-          <p className="meta">Contact: {report.contact || "none"}</p>
           <label>
             Title
             <input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} />

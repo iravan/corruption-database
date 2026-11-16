@@ -15,7 +15,6 @@ export default function ReportPage() {
   const [place, setPlace] = useState("");
   const [occurredOn, setOccurredOn] = useState("");
   const [sourceLinks, setSourceLinks] = useState("");
-  const [contact, setContact] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const [queued, setQueued] = useState(false);
@@ -43,7 +42,6 @@ export default function ReportPage() {
           place,
           occurred_on: occurredOn,
           source_links: sourceLinks,
-          contact,
         }),
       });
       setQueued(true);
@@ -59,14 +57,13 @@ export default function ReportPage() {
       <h1>Report corruption</h1>
       {queued ? (
         <p className="success">
-          Your report is queued for review. It is not public.
+          Your anonymous report is queued for review. It is not public.
         </p>
       ) : (
         <form onSubmit={onSubmit}>
           <p className="help">
-            Do not put phone numbers, identity numbers, or home addresses in the
-            report. A way to reach you stays in the contact field, and only an
-            admin can see it.
+            A report is anonymous. Do not include your name, phone number,
+            identity number, or home address.
           </p>
           <label>
             Title
@@ -109,11 +106,6 @@ export default function ReportPage() {
             Source links
             <input value={sourceLinks} onChange={(event) => setSourceLinks(event.target.value)} maxLength={1000} />
           </label>
-          <label>
-            Contact, optional
-            <input value={contact} onChange={(event) => setContact(event.target.value)} maxLength={200} />
-          </label>
-          <p className="help">The contact is not published.</p>
           {error ? <p className="error">{error}</p> : null}
           <button type="submit" disabled={pending}>
             {pending ? "Sending" : "Submit report"}

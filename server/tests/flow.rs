@@ -5,6 +5,7 @@ use server::routes::{router, AppState, Limiter};
 use server::store::Store;
 use serde_json::{json, Value};
 use tower::ServiceExt;
+use rusqlite::OptionalExtension;
 use uuid::Uuid;
 
 fn app(limit: usize) -> (axum::Router, std::path::PathBuf) {
@@ -55,7 +56,7 @@ fn authed(method: &str, uri: &str, token: &str, body: Option<Value>) -> Request<
     }
 }
 
-fn report(title: &str, contact: &str) -> Value {
+fn report(title: &str) -> Value {
     json!({
         "title": title,
         "body": "The winning bid was fixed before the deadline.",
@@ -64,14 +65,14 @@ fn report(title: &str, contact: &str) -> Value {
         "place": "Harbour",
         "occurred_on": "2019-01-01",
         "source_links": "",
-        "contact": contact
+        "contact": "letterbox@example.com"
     })
 }
 
 #[tokio::test]
 async fn a_submission_stays_hidden_until_an_admin_publishes_it() {
     let (app, path) = app(30);
-    let (status, created) = call(&app, post("/reports", None, report("Harbour tender", "letterbox@example.com"))).await;
+    let (status, created) = call(&app, post("/reports", None, report("Harbour tender"))).await;
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(created["status"], "pending");
     let id = created["id"].as_str().unwrap();
@@ -82,6 +83,7 @@ async fn a_submission_stays_hidden_until_an_admin_publishes_it() {
     let raw = list.to_string();
     assert!(!raw.contains("letterbox@example.com"));
     assert!(!raw.contains("contact"));
+    assert!(private_table_is_gone(&path));
 
     let (status, _) = call(
         &app,
@@ -124,8 +126,9 @@ async fn a_submission_stays_hidden_until_an_admin_publishes_it() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(queue["reports"][0]["contact"], "letterbox@example.com");
     assert_eq!(queue["reports"][0]["id"], id);
+    assert!(!queue.to_string().contains("letterbox@example.com"));
+    assert!(queue["reports"][0].get("contact").is_none());
 
     let (status, published) = call(
         &app,
@@ -244,9 +247,21 @@ async fn empty_text_and_private_data_are_not_stored() {
 #[tokio::test]
 async fn the_rate_limit_stops_another_post() {
     let (app, path) = app(1);
-    let (status, _) = call(&app, post("/reports", None, report("First", ""))).await;
+    let (status, _) = call(&app, post("/reports", None, report("First"))).await;
     assert_eq!(status, StatusCode::CREATED);
-    let (status, _) = call(&app, post("/reports", None, report("Second", ""))).await;
+    let (status, _) = call(&app, post("/reports", None, report("Second"))).await;
     assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
     let _ = std::fs::remove_file(path);
+}
+
+fn private_table_is_gone(path: &std::path::Path) -> bool {
+    let conn = rusqlite::Connection::open(path).unwrap();
+    conn.query_row(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'report_private'",
+        [],
+        |row| row.get::<_, String>(0),
+    )
+    .optional()
+    .unwrap()
+    .is_none()
 }
