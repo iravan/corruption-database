@@ -1,3 +1,5 @@
+import { demoRequest, isDemo } from "@/lib/demo";
+
 export class ApiError extends Error {}
 
 function root(): string {
@@ -9,6 +11,13 @@ export async function api<T>(
   init: RequestInit = {},
   token = "",
 ): Promise<T> {
+  if (isDemo()) {
+    try {
+      return demoRequest<T>(path, init, token);
+    } catch (err: unknown) {
+      throw new ApiError(err instanceof Error ? err.message : "The request failed.");
+    }
+  }
   const base = root();
   if (!base) {
     throw new ApiError("Set NEXT_PUBLIC_API_URL and restart the page.");

@@ -43,7 +43,7 @@ Delete these from the new app. They are the whole current product and do not map
 - [x] Server: Supabase JWKS login for the public (`server/src/auth.rs`). Public `POST` does not use it.
 - [x] Web: MapLibre, grid, GPS, comment sheet, token notice, demo mode (`web/components/map-stage.tsx`, `comment-sheet.tsx`, `token-notice.tsx`, `web/lib/area.ts`, `web/app/demo/page.tsx`).
 - [x] Web: `@supabase/supabase-js` unless Supabase is kept for the admin login only.
-- [x] GitHub Pages workflow (`.github/workflows/pages.yml`). A database needs the Rust process running. Pages can only host a static shell.
+- [x] GitHub Pages serves a static demo of the public pages and the admin panel. The database still needs the Rust process on your own machine.
 
 ## 5. Public site
 

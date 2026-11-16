@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Shell } from "@/components/shell";
 import { ApiError, api } from "@/lib/api";
+import { demoPublished, isDemo } from "@/lib/demo";
 import { meta, type Report } from "@/lib/types";
 
 export default function HomePage() {
-  const [reports, setReports] = useState<Report[] | null>(null);
+  const [reports, setReports] = useState<Report[] | null>(isDemo() ? demoPublished() : null);
   const [error, setError] = useState("");
 
   useEffect(() => {

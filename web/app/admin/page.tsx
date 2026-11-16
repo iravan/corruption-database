@@ -4,20 +4,31 @@ import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { Shell } from "@/components/shell";
 import { ApiError, adminToken, api, clearAdminToken, setAdminToken } from "@/lib/api";
+import { demoQueue, isDemo } from "@/lib/demo";
 import { meta, type Report } from "@/lib/types";
 
 const STATUSES = ["pending", "published", "rejected"] as const;
 
 export default function AdminPage() {
-  const [ready, setReady] = useState(false);
-  const [token, setToken] = useState("");
+  const [ready, setReady] = useState(isDemo());
+  const [token, setToken] = useState(isDemo() ? "demo" : "");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<(typeof STATUSES)[number]>("pending");
-  const [reports, setReports] = useState<Report[] | null>(null);
+  const [reports, setReports] = useState<Report[] | null>(isDemo() ? demoQueue("pending") : null);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
+    if (isDemo()) {
+      if (sessionStorage.getItem("demo-signed-out") === "1") {
+        setToken("");
+      } else {
+        setAdminToken("demo");
+        setToken("demo");
+      }
+      setReady(true);
+      return;
+    }
     setToken(adminToken());
     setReady(true);
   }, []);
@@ -50,6 +61,7 @@ export default function AdminPage() {
       });
       setAdminToken(session.token);
       setToken(session.token);
+      sessionStorage.removeItem("demo-signed-out");
       setPassword("");
     } catch (err: unknown) {
       setError(err instanceof ApiError ? err.message : "Sign-in failed.");
@@ -61,6 +73,9 @@ export default function AdminPage() {
   async function onSignOut() {
     if (token) {
       await api("/admin/session", { method: "DELETE" }, token).catch(() => undefined);
+    }
+    if (isDemo()) {
+      sessionStorage.setItem("demo-signed-out", "1");
     }
     clearAdminToken();
     setToken("");
@@ -83,6 +98,7 @@ export default function AdminPage() {
               required
             />
           </label>
+          {isDemo() ? <p className="help">Demo password: demo</p> : null}
           {error ? <p className="error">{error}</p> : null}
           <button type="submit" disabled={pending}>
             {pending ? "Checking" : "Sign in"}

@@ -49,6 +49,13 @@ a:focus-visible {
   outline-offset: 2px;
 }
 
+.demo-banner {
+  background: #f7e7e2;
+  border: 1px solid var(--line);
+  padding: 0.55rem 0.75rem;
+  margin-bottom: 1rem;
+}
+
 .shell {
   max-width: 42rem;
   margin: 0 auto;

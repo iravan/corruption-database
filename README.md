@@ -18,3 +18,11 @@ cd web && bun install && bun run dev
 ```
 
 The API listens on `127.0.0.1:8787`. Open the page at `http://127.0.0.1:3000`. Put TLS and the public hostname on a reverse proxy in front of both processes. Back up `data/reports.sqlite`. A report is anonymous: the file has no contact and no IP address. The server does not print report text.
+
+## Demo
+
+GitHub Pages serves a static demo of the public site and the admin panel. The reports there are examples. Nothing is written to a database.
+
+https://iravan.github.io/corruption-database/
+
+The admin demo is already signed in. After signing out, the password is `demo`.
