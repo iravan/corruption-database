@@ -1,0 +1,8 @@
+.env
+.env.*
+*.sqlite
+*.sqlite3
+target/
+node_modules/
+.next/
+out/
